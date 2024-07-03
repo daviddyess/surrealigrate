@@ -31,7 +31,7 @@ const logger = winston.createLogger({
   ]
 });
 
-let db;
+const db = new Surreal();
 
 async function loadConfig(configPath) {
   try {
@@ -49,6 +49,8 @@ async function loadConfig(configPath) {
     config.database.namespace =
       process.env.DB_NAMESPACE || config.database.namespace;
     config.database.dbname = process.env.DB_NAME || config.database.dbname;
+    config.database.scope =
+      process.env.DB_SCOPE || config.database?.scope || undefined;
 
     logger.info('Configuration loaded successfully');
   } catch (error) {
@@ -59,13 +61,27 @@ async function loadConfig(configPath) {
 
 async function connectToDatabase() {
   try {
-    db = new Surreal(config.database.url);
-    await db.signin({
-      user: config.database.user,
-      pass: config.database.pass
+    await db.connect(config.database.url, {
+      namespace: config.database.namespace,
+      database: config.database.dbname,
+      auth: {
+        namespace: config.database.namespace,
+        database: config.database.dbname,
+        scope: config.database.scope,
+        user: config.database.user,
+        pass: config.database.pass
+      }
     });
-    await db.use(config.database.namespace, config.database.dbname);
+
     logger.info('Connected to database successfully');
+
+    const setup = await db.query('INFO FOR DB;');
+    if (!setup?.tables?.migrations) {
+      await db.query(
+        'DEFINE TABLE article TYPE NORMAL SCHEMALESS PERMISSIONS NONE;'
+      );
+      logger.info('Created migrations table');
+    }
   } catch (error) {
     logger.error(`Failed to connect to database: ${error.message}`);
     process.exit(1);
