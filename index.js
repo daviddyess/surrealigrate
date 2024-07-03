@@ -204,8 +204,6 @@ async function rollback(directory, toVersion = null) {
   }
 }
 
-// ... [previous functions remain unchanged]
-
 async function getCurrentVersionInfo() {
   try {
     const result = await db.query(
