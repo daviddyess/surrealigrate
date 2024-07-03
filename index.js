@@ -13,7 +13,6 @@ const __dirname = path.dirname(__filename);
 // Load environment variables
 dotenv.config();
 
-// Import config
 import config from './config.js';
 
 // Setup logger
@@ -61,16 +60,19 @@ async function loadConfig(configPath) {
 
 async function connectToDatabase() {
   try {
-    await db.connect(config.database.url, {
+    // Connect to the database
+    await db.connect(config.database.url);
+
+    // Select a specific namespace / database
+    await db.use({
       namespace: config.database.namespace,
-      database: config.database.dbname,
-      auth: {
-        namespace: config.database.namespace,
-        database: config.database.dbname,
-        scope: config.database.scope,
-        user: config.database.user,
-        pass: config.database.pass
-      }
+      database: config.database.dbname
+    });
+
+    // Signin as a namespace, database, or root user
+    await db.signin({
+      username: config.database.user,
+      password: config.database.pass
     });
 
     logger.info('Connected to database successfully');
@@ -78,7 +80,7 @@ async function connectToDatabase() {
     const setup = await db.query('INFO FOR DB;');
     if (!setup?.tables?.migrations) {
       await db.query(
-        'DEFINE TABLE article TYPE NORMAL SCHEMALESS PERMISSIONS NONE;'
+        'DEFINE TABLE migrations TYPE NORMAL SCHEMALESS PERMISSIONS NONE;'
       );
       logger.info('Created migrations table');
     }
@@ -90,11 +92,9 @@ async function connectToDatabase() {
 
 async function getMigrationFiles(directory) {
   try {
-    const files = await fs.readdir(directory);
+    console.log(files);
     return files
-      .filter(
-        (file) => file.endsWith('.do.surql') || file.endsWith('.undo.surql')
-      )
+      .filter((file) => file.includes('.do.') || file.includes('.undo.'))
       .reduce((acc, file) => {
         const [version, action, ...titleParts] = path
           .basename(file, '.surql')
@@ -112,16 +112,31 @@ async function getMigrationFiles(directory) {
   }
 }
 
+async function getCurrentVersion() {
+  try {
+    const result = await db.query(
+      'SELECT * FROM migrations ORDER BY version DESC LIMIT 1'
+    );
+    return result[0]?.result?.[0]?.version || 0;
+  } catch (error) {
+    logger.error(`Failed to get current version: ${error.message}`);
+    return 0;
+  }
+}
+
 async function setCurrentVersion(version, title = null) {
   try {
     if (title) {
       await db.query(
-        'CREATE migration_version SET value = $version, title = $title',
-        { version, title }
+        'CREATE migrations SET version = $version, title = $title',
+        {
+          version,
+          title
+        }
       );
       logger.info(`Set current version to ${version} (${title})`);
     } else {
-      await db.query('CREATE migration_version SET value = $version', {
+      await db.query('CREATE migrations SET version = $version', {
         version
       });
       logger.info(`Set current version to ${version}`);
@@ -223,14 +238,14 @@ async function rollback(directory, toVersion = null) {
 async function getCurrentVersionInfo() {
   try {
     const result = await db.query(
-      'SELECT * FROM migration_version ORDER BY value DESC LIMIT 1'
+      'SELECT * FROM migrations ORDER BY version DESC LIMIT 1'
     );
     return (
-      result[0]?.result?.[0] || { value: 0, title: 'No migrations applied' }
+      result[0]?.result?.[0] || { version: 0, title: 'No migrations applied' }
     );
   } catch (error) {
     logger.error(`Failed to get current version info: ${error.message}`);
-    return { value: 0, title: 'Error retrieving version info' };
+    return { version: 0, title: 'Error retrieving version info' };
   }
 }
 
@@ -245,14 +260,14 @@ async function getInfo(directory) {
   const latestVersion = Math.max(...versions.map((v) => parseInt(v)));
 
   const pendingMigrations = versions
-    .filter((version) => parseInt(version) > currentVersionInfo.value)
+    .filter((version) => parseInt(version) > currentVersionInfo.version)
     .map((version) => ({
       version,
       title: migrationFiles[version].title || 'Untitled'
     }));
 
   return {
-    currentVersion: currentVersionInfo.value,
+    currentVersion: currentVersionInfo.version,
     currentVersionTitle: currentVersionInfo.title,
     latestVersion,
     pendingMigrations
