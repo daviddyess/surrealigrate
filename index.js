@@ -14,6 +14,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 import config from './config.js';
+import { log } from 'console';
 
 // Setup logger
 const logger = winston.createLogger({
@@ -78,7 +79,8 @@ async function connectToDatabase() {
     logger.info('Connected to database successfully');
 
     const setup = await db.query('INFO FOR DB;');
-    if (!setup?.tables?.migrations) {
+
+    if (!setup?.[0]?.tables?.migrations) {
       await db.query(
         'DEFINE TABLE migrations TYPE NORMAL SCHEMALESS PERMISSIONS NONE;'
       );
@@ -92,7 +94,7 @@ async function connectToDatabase() {
 
 async function getMigrationFiles(directory) {
   try {
-    console.log(files);
+    const files = await fs.readdir(directory);
     return files
       .filter((file) => file.includes('.do.') || file.includes('.undo.'))
       .reduce((acc, file) => {
@@ -117,7 +119,8 @@ async function getCurrentVersion() {
     const result = await db.query(
       'SELECT * FROM migrations ORDER BY version DESC LIMIT 1'
     );
-    return result[0]?.result?.[0]?.version || 0;
+
+    return result[0]?.[0]?.version || 0;
   } catch (error) {
     logger.error(`Failed to get current version: ${error.message}`);
     return 0;
@@ -184,6 +187,11 @@ async function migrate(directory, toVersion = null) {
     return;
   }
 
+  if (targetVersion === currentVersion) {
+    logger.info('No pending migrations. Database is up to date.');
+    return;
+  }
+
   for (const version of versions) {
     if (
       parseInt(version) > currentVersion &&
@@ -240,9 +248,8 @@ async function getCurrentVersionInfo() {
     const result = await db.query(
       'SELECT * FROM migrations ORDER BY version DESC LIMIT 1'
     );
-    return (
-      result[0]?.result?.[0] || { version: 0, title: 'No migrations applied' }
-    );
+
+    return result[0]?.[0] || { version: 0, title: 'No migrations applied' };
   } catch (error) {
     logger.error(`Failed to get current version info: ${error.message}`);
     return { version: 0, title: 'Error retrieving version info' };
@@ -278,19 +285,19 @@ async function displayInfo(directory) {
   try {
     const info = await getInfo(directory);
 
-    console.log('\nMigration Status:');
-    console.log(
+    log('\nMigration Status:');
+    log(
       `Current Version: ${info.currentVersion} (${info.currentVersionTitle})`
     );
-    console.log(`Latest Version: ${info.latestVersion}`);
+    log(`Latest Version: ${info.latestVersion}\n`);
 
     if (info.pendingMigrations.length > 0) {
-      console.log('\nPending Migrations:');
+      log('\nPending Migrations:');
       info.pendingMigrations.forEach((migration) => {
-        console.log(`  - Version ${migration.version}: ${migration.title}`);
+        log(`  - Version ${migration.version}: ${migration.title}`);
       });
     } else {
-      console.log('\nNo pending migrations. Database is up to date.');
+      logger.info('No pending migrations. Database is up to date.');
     }
   } catch (error) {
     logger.error(`Failed to retrieve migration info: ${error.message}`);
@@ -407,4 +414,5 @@ This command will display:
     await displayInfo(options.directory);
   });
 
-program.parse(process.argv);
+await program.parseAsync(process.argv);
+process.exit(0);
