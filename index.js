@@ -6,6 +6,7 @@ import Surreal from 'surrealdb.js';
 import winston from 'winston';
 import yaml from 'js-yaml';
 import dotenv from 'dotenv';
+import { getLogger } from './lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,19 +18,7 @@ import config from './config.js';
 import { log } from 'console';
 
 // Setup logger
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.printf(({ timestamp, level, message }) => {
-      return `${timestamp} [${level}]: ${message}`;
-    })
-  ),
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: 'migration.log' })
-  ]
-});
+const logger = getLogger('SurrealDB');
 
 const db = new Surreal();
 
@@ -54,7 +43,7 @@ async function loadConfig(configPath) {
 
     logger.info('Configuration loaded successfully');
   } catch (error) {
-    logger.error(`Failed to load configuration: ${error.message}`);
+    logger.error(`Failed to load configuration: ${error.message}\n`);
     process.exit(1);
   }
 }
@@ -87,7 +76,7 @@ async function connectToDatabase() {
       logger.info('Created migrations table');
     }
   } catch (error) {
-    logger.error(`Failed to connect to database: ${error.message}`);
+    logger.error(`Failed to connect to database: ${error.message}\n`);
     process.exit(1);
   }
 }
@@ -109,7 +98,7 @@ async function getMigrationFiles(directory) {
         return acc;
       }, {});
   } catch (error) {
-    logger.error(`Failed to read migration files: ${error.message}`);
+    logger.error(`Failed to read migration files: ${error.message}\n`);
     process.exit(1);
   }
 }
@@ -122,7 +111,7 @@ async function getCurrentVersion() {
 
     return result[0]?.[0]?.version || 0;
   } catch (error) {
-    logger.error(`Failed to get current version: ${error.message}`);
+    logger.error(`Failed to get current version: ${error.message}\n`);
     return 0;
   }
 }
@@ -145,7 +134,7 @@ async function setCurrentVersion(version, title = null) {
       logger.info(`Set current version to ${version}`);
     }
   } catch (error) {
-    logger.error(`Failed to set current version: ${error.message}`);
+    logger.error(`Failed to set current version: ${error.message}\n`);
     throw error;
   }
 }
@@ -162,7 +151,7 @@ async function executeMigration(filePath, action) {
   } catch (error) {
     await db.query('CANCEL TRANSACTION');
     logger.error(
-      `Failed to ${action === 'do' ? 'apply' : 'revert'} migration ${path.basename(filePath)}: ${error.message}`
+      `Failed to ${action === 'do' ? 'apply' : 'revert'} migration ${path.basename(filePath)}: ${error.message}\n`
     );
     throw error;
   }
@@ -182,13 +171,13 @@ async function migrate(directory, toVersion = null) {
 
   if (targetVersion < currentVersion) {
     logger.warn(
-      `Current version (${currentVersion}) is higher than target version (${targetVersion}). Use rollback instead.`
+      `Current version (${currentVersion}) is higher than target version (${targetVersion}). Use rollback instead.\n`
     );
     return;
   }
 
   if (targetVersion === currentVersion) {
-    logger.info('No pending migrations. Database is up to date.');
+    logger.info('No pending migrations. Database is up to date.\n');
     return;
   }
 
@@ -219,7 +208,7 @@ async function rollback(directory, toVersion = null) {
 
   if (targetVersion >= currentVersion) {
     logger.warn(
-      `Target version (${targetVersion}) is not lower than current version (${currentVersion}). Use migrate instead.`
+      `Target version (${targetVersion}) is not lower than current version (${currentVersion}). Use migrate instead.\n`
     );
     return;
   }
@@ -251,7 +240,7 @@ async function getCurrentVersionInfo() {
 
     return result[0]?.[0] || { version: 0, title: 'No migrations applied' };
   } catch (error) {
-    logger.error(`Failed to get current version info: ${error.message}`);
+    logger.error(`Failed to get current version info: ${error.message}\n`);
     return { version: 0, title: 'Error retrieving version info' };
   }
 }
@@ -297,10 +286,10 @@ async function displayInfo(directory) {
         log(`  - Version ${migration.version}: ${migration.title}`);
       });
     } else {
-      logger.info('No pending migrations. Database is up to date.');
+      logger.info('No pending migrations. Database is up to date.\n');
     }
   } catch (error) {
-    logger.error(`Failed to retrieve migration info: ${error.message}`);
+    logger.error(`Failed to retrieve migration info: ${error.message}\n`);
   }
 }
 
