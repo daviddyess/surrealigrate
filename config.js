@@ -1,4 +1,8 @@
-// config.mjs
+/**
+ * Surrealigrate
+ * @copyright Copyright (c) 2024 David Dyess II
+ * @license MIT see LICENSE
+ */
 export default {
   database: {
     url: process.env.DB_URL,

@@ -1,3 +1,8 @@
+/**
+ * Surrealigrate
+ * @copyright Copyright (c) 2024 David Dyess II
+ * @license MIT see LICENSE
+ */
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -302,6 +307,11 @@ program
   )
   .version('1.0.0')
   .option('-c, --config <path>', 'path to YAML configuration file')
+  .option(
+    '-d, --dir <path>',
+    'directory containing migration files',
+    './migrations'
+  )
   .addHelpText(
     'after',
     `
@@ -330,11 +340,6 @@ For more information on each command, use: npm run help:[command]
 program
   .command('migrate')
   .description('Apply pending migrations to the database')
-  .option(
-    '-d, --directory <path>',
-    'directory containing migration files',
-    './migrations'
-  )
   .option('--to <version>', 'migrate to a specific version')
   .addHelpText(
     'after',
@@ -350,17 +355,12 @@ Migration files should be named in the format: <version>.<do|undo>.<title>.surql
   )
   .action(async (options) => {
     await loadConfig(program.opts().config);
-    await migrate(options.directory, options.to);
+    await migrate(program.opts().dir, options.to);
   });
 
 program
   .command('rollback')
   .description('Rollback applied migrations')
-  .option(
-    '-d, --directory <path>',
-    'directory containing migration files',
-    './migrations'
-  )
   .option('--to <version>', 'rollback to a specific version')
   .addHelpText(
     'after',
@@ -375,17 +375,12 @@ This command will rollback the last applied migration or rollback to a specific 
   )
   .action(async (options) => {
     await loadConfig(program.opts().config);
-    await rollback(options.directory, options.to);
+    await rollback(program.opts().dir, options.to);
   });
 
 program
   .command('info')
   .description('Display information about the current migration status')
-  .option(
-    '-d, --directory <path>',
-    'directory containing migration files',
-    './migrations'
-  )
   .addHelpText(
     'after',
     `
@@ -400,7 +395,7 @@ This command will display:
   )
   .action(async (options) => {
     await loadConfig(program.opts().config);
-    await displayInfo(options.directory);
+    await displayInfo(program.opts().dir);
   });
 
 await program.parseAsync(process.argv);

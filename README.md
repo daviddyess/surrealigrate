@@ -1,6 +1,36 @@
 # surrealigrate
 
-SurrealDB CLI Migrations for Node.js
+SurrealDB CLI Migrations for Node.js:
+
+- Versioned migration files such as `0001.do.sql`, `0002.undo.sql`, etc.
+
+- Migrate to the latest version or a specific version using `npm run migrate` or `npm run migrate --to 3`
+
+- Rollback to previous migration or a specific version using `npm run rollback` or `npm run rollback --to 2`
+
+- Display current migration status with pending migrations using `npm run info`
+
+- Built-in help using `npm run help` or `npm run help:[command]` or `npm run [command] -- --help`
+
+- Supports YAML configuration files, environment variables, and a combination of both
+
+**Built with assistance from Claude AI**
+
+## Migrations Folder
+
+The migrations folder defaults to `./migrations` but can be configured using the `-d` or `--dir` option with any command.
+
+## Migration File Naming Convention
+
+- The migration file naming convention is `0001.do.surql` for the first migration, `0002.do.surql` for the second migration, and so on.
+
+- You can also use a title in the migration file name, such as `0001.do.posts.surql` and `0002.undo.posts.surql`.
+
+- The version number is padded with leading zeros to ensure proper sorting order, you can use any number of leading zeros as long as they are consistent throughout the migration files.
+
+- Version numbers simplify to an integer, so you can use --to 3 to specify a migration file that uses `003` in the file name.
+
+- The `do` or `undo` segment indicates whether the file is for a migration (do) or a rollback (undo).
 
 ## Configuration
 
@@ -98,7 +128,7 @@ node index.js migrate --to 3
 ```
 
 ```
-npm run migrate --to 3
+npm run migrate -- --to 3
 ```
 
 ### Rollback the last migration
@@ -118,7 +148,7 @@ node index.js rollback --to 2
 ```
 
 ```
-npm run rollback --to 2
+npm run rollback -- --to 2
 ```
 
 ### Using default configuration
@@ -150,3 +180,11 @@ DB_USER=admin DB_PASS=secretpassword node index.js migrate
 ```
 DB_USER=admin DB_PASS=secretpassword npm run migrate
 ```
+
+## License
+
+Surrealigrate is licensed under the MIT License. You are free to use it in your projects, commercial or non-commercial, as long as you retain the copyright notice and license text. Please note that the authors of Surrealigrate are not responsible for any damages or losses caused by the use of this software. See the LICENSE file for more details.
+
+## Copyright
+
+Copyright (c) 2024 David Dyess II and contributors. All rights reserved.
