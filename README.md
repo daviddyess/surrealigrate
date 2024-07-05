@@ -181,6 +181,10 @@ DB_USER=admin DB_PASS=secretpassword node index.js migrate
 DB_USER=admin DB_PASS=secretpassword npm run migrate
 ```
 
+## Logs
+
+A `migrations.log` file will be created in the `/logs folder to log all migration activity.
+
 ## License
 
 Surrealigrate is licensed under the MIT License. You are free to use it in your projects, commercial or non-commercial, as long as you retain the copyright notice and license text. Please note that the authors of Surrealigrate are not responsible for any damages or losses caused by the use of this software. See the LICENSE file for more details.
