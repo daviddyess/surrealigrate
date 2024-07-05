@@ -7,85 +7,17 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Command } from 'commander';
-import Surreal from 'surrealdb.js';
-import winston from 'winston';
-import yaml from 'js-yaml';
-import dotenv from 'dotenv';
+import config, { loadConfig } from './lib/configuration.js';
 import { getLogger } from './lib/logger.js';
+import { db, connectToDatabase } from './lib/surrealdb.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
-dotenv.config();
-
-import config from './config.js';
 import { log } from 'console';
 
 // Setup logger
 const logger = getLogger('SurrealDB');
-
-const db = new Surreal();
-
-async function loadConfig(configPath) {
-  try {
-    if (configPath) {
-      const configFile = await fs.readFile(configPath, 'utf8');
-      const yamlConfig = yaml.load(configFile);
-      Object.assign(config, yamlConfig);
-      logger.info('Configuration loaded from YAML file');
-    }
-
-    // Override with environment variables if they exist
-    config.database.url = process.env.DB_URL || config.database.url;
-    config.database.user = process.env.DB_USER || config.database.user;
-    config.database.pass = process.env.DB_PASS || config.database.pass;
-    config.database.namespace =
-      process.env.DB_NAMESPACE || config.database.namespace;
-    config.database.dbname = process.env.DB_NAME || config.database.dbname;
-    config.database.scope =
-      process.env.DB_SCOPE || config.database?.scope || undefined;
-
-    logger.info('Configuration loaded successfully');
-  } catch (error) {
-    logger.error(`Failed to load configuration: ${error.message}\n`);
-    process.exit(1);
-  }
-}
-
-async function connectToDatabase() {
-  try {
-    // Connect to the database
-    await db.connect(config.database.url);
-
-    // Select a specific namespace / database
-    await db.use({
-      namespace: config.database.namespace,
-      database: config.database.dbname
-    });
-
-    // Signin as a namespace, database, or root user
-    await db.signin({
-      username: config.database.user,
-      password: config.database.pass
-    });
-
-    logger.info('Connected to database successfully');
-
-    const setup = await db.query('INFO FOR DB;');
-
-    if (!setup?.[0]?.tables?.migrations) {
-      await db.query(`
-      DEFINE TABLE migrations TYPE NORMAL SCHEMALESS PERMISSIONS NONE;
-      DEFINE INDEX version ON migrations FIELDS version UNIQUE;
-      `);
-      logger.info('Created migrations table');
-    }
-  } catch (error) {
-    logger.error(`Failed to connect to database: ${error.message}\n`);
-    process.exit(1);
-  }
-}
 
 async function getMigrationFiles(directory) {
   try {
