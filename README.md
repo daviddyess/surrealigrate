@@ -4,9 +4,9 @@ SurrealDB CLI Migrations for Node.js:
 
 - Versioned migration files such as `0001.do.sql`, `0002.undo.sql`, etc.
 
-- Migrate to the latest version or a specific version using `npm run migrate` or `npm run migrate --to 3`
+- Migrate to the latest version or a specific version using `npm run migrate` or `npm run migrate -- --to 3`
 
-- Rollback to previous migration or a specific version using `npm run rollback` or `npm run rollback --to 2`
+- Rollback to previous migration or a specific version using `npm run rollback` or `npm run rollback -- --to 2`
 
 - Display current migration status with pending migrations using `npm run info`
 
