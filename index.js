@@ -70,9 +70,10 @@ async function connectToDatabase() {
     const setup = await db.query('INFO FOR DB;');
 
     if (!setup?.[0]?.tables?.migrations) {
-      await db.query(
-        'DEFINE TABLE migrations TYPE NORMAL SCHEMALESS PERMISSIONS NONE;'
-      );
+      await db.query(`
+      DEFINE TABLE migrations TYPE NORMAL SCHEMALESS PERMISSIONS NONE;
+      DEFINE INDEX version ON migrations FIELDS version UNIQUE;
+      `);
       logger.info('Created migrations table');
     }
   } catch (error) {
@@ -126,12 +127,12 @@ async function setCurrentVersion(version, title = null) {
           title
         }
       );
-      logger.info(`Set current version to ${version} (${title})`);
+      logger.info(`Set current version to ${version} (${title})\n`);
     } else {
       await db.query('CREATE migrations SET version = $version', {
         version
       });
-      logger.info(`Set current version to ${version}`);
+      logger.info(`Set current version to ${version}\n`);
     }
   } catch (error) {
     logger.error(`Failed to set current version: ${error.message}\n`);
@@ -223,11 +224,9 @@ async function rollback(directory, toVersion = null) {
         `Rolling back version ${version}${title ? ` (${title})` : ''}`
       );
       await executeMigration(path.join(directory, undoFile), 'undo');
-      const previousVersion = parseInt(version) - 1;
-      const previousTitle = versions.includes(previousVersion.toString())
-        ? migrationFiles[previousVersion.toString()].title
-        : null;
-      await setCurrentVersion(previousVersion, previousTitle);
+      const del = await db.query('DELETE migrations WHERE version = $version', {
+        version: parseInt(version)
+      });
     }
   }
 }
@@ -281,10 +280,11 @@ async function displayInfo(directory) {
     log(`Latest Version: ${info.latestVersion}\n`);
 
     if (info.pendingMigrations.length > 0) {
-      log('\nPending Migrations:');
+      log('Pending Migrations:');
       info.pendingMigrations.forEach((migration) => {
         log(`  - Version ${migration.version}: ${migration.title}`);
       });
+      log('-------------------\n');
     } else {
       logger.info('No pending migrations. Database is up to date.\n');
     }
