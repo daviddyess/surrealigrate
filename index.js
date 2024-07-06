@@ -229,7 +229,9 @@ async function displayInfo(directory) {
     logger.error(`Failed to retrieve migration info: ${error.message}\n`);
   }
 }
-
+/**
+ * Main command line interface
+ */
 const program = new Command();
 
 program
@@ -268,7 +270,9 @@ Environment Variables:
 For more information on each command, use: npm run help:[command]
 `
   );
-
+/**
+ * Apply pending migrations to the database
+ */
 program
   .command('migrate')
   .description('Apply pending migrations to the database')
@@ -289,7 +293,9 @@ Migration files should be named in the format: <version>.<do|undo>.<title>.surql
     await loadConfig(program.opts().config);
     await migrate(program.opts().dir, options.to);
   });
-
+/**
+ * Rollback applied migrations
+ */
 program
   .command('rollback')
   .description('Rollback applied migrations')
@@ -309,7 +315,9 @@ This command will rollback the last applied migration or rollback to a specific 
     await loadConfig(program.opts().config);
     await rollback(program.opts().dir, options.to);
   });
-
+/**
+ * Display information about the current migration status
+ */
 program
   .command('info')
   .description('Display information about the current migration status')
@@ -328,6 +336,187 @@ This command will display:
   .action(async (options) => {
     await loadConfig(program.opts().config);
     await displayInfo(program.opts().dir);
+  });
+/**
+ * Introspect the database and generate migration files
+ */
+
+// Function to introspect the database
+async function introspectDatabase() {
+  await connectToDatabase();
+  logger.info('Introspecting database tables');
+  const introspection = {
+    tables: {},
+    version: Date.now() // Using timestamp as version
+  };
+
+  // Get all tables
+  const dbInfo = await db.query('INFO FOR DB');
+  const tables = dbInfo?.[0]?.tables;
+  // Create introspections table if it doesn't exist
+  if (!tables?.introspections) {
+    await db.query(`
+    DEFINE TABLE introspections TYPE NORMAL SCHEMALESS PERMISSIONS NONE;
+    DEFINE FIELD data ON introspections TYPE object PERMISSIONS FOR select, create, update, delete WHERE FULL;
+    DEFINE FIELD timestamp ON introspections TYPE datetime DEFAULT time::now() PERMISSIONS FOR select, create, update, delete WHERE FULL;
+    DEFINE INDEX timestamp ON introspections FIELDS timestamp UNIQUE;
+    `);
+    logger.info('Created introspections table');
+  }
+  // Get table info
+  let tableCount = 0;
+  log('\nCollecting database table information:');
+  for (const table of Object.keys(tables)) {
+    log(` - Table ${table}...`);
+    introspection.tables[table] = await db.query(`INFO FOR TABLE ${table}`);
+    tableCount++;
+  }
+  log(' -------------------');
+  log(`${tableCount} tables extracted\n`);
+  logger.info(`Introspection complete`);
+
+  return introspection;
+}
+
+// Function to save introspection data
+async function saveIntrospection(data) {
+  await db.create('introspections', {
+    data
+  });
+  logger.info('Introspection data saved.\n');
+}
+
+// Function to get the latest introspection
+async function getLatestIntrospection() {
+  await connectToDatabase();
+  const [[latest]] = await db.query(
+    'SELECT * FROM introspections ORDER BY timestamp DESC LIMIT 1'
+  );
+  console.log(latest);
+  return latest;
+}
+
+// Function to compare introspections and generate migration files
+async function generateMigration(oldData, newData) {
+  let doMigration = `
+-- Migration to apply changes
+-- Generated at ${new Date().toISOString()}
+`;
+  let undoMigration = `
+-- Migration to revert changes
+-- Generated at ${new Date().toISOString()}
+`;
+
+  // Compare tables
+  for (const tableName in newData.tables) {
+    if (!oldData.tables[tableName]) {
+      doMigration += `DEFINE TABLE ${tableName};\n`;
+      undoMigration = `REMOVE TABLE ${tableName};\n` + undoMigration;
+    }
+
+    // Compare fields
+    for (const fieldName in newData.tables[tableName].fields) {
+      if (!oldData.tables[tableName]?.fields[fieldName]) {
+        const fieldType = newData.tables[tableName].fields[fieldName].type;
+        doMigration += `DEFINE FIELD ${fieldName} ON TABLE ${tableName} TYPE ${fieldType};\n`;
+        undoMigration =
+          `REMOVE FIELD ${fieldName} ON TABLE ${tableName};\n` + undoMigration;
+      }
+    }
+
+    // Compare indexes
+    for (const indexName in newData.tables[tableName].indexes) {
+      if (!oldData.tables[tableName]?.indexes[indexName]) {
+        const index = newData.tables[tableName].indexes[indexName];
+        const uniqueStr = index.unique ? 'UNIQUE ' : '';
+        doMigration += `DEFINE ${uniqueStr}INDEX ${indexName} ON TABLE ${tableName} FIELDS ${index.fields.join(', ')};\n`;
+        undoMigration =
+          `REMOVE INDEX ${indexName} ON TABLE ${tableName};\n` + undoMigration;
+      }
+    }
+  }
+
+  // Check for removed tables, fields, and indexes
+  for (const tableName in oldData.tables) {
+    if (!newData.tables[tableName]) {
+      doMigration += `REMOVE TABLE ${tableName};\n`;
+      undoMigration = `DEFINE TABLE ${tableName};\n` + undoMigration;
+    } else {
+      for (const fieldName in oldData.tables[tableName].fields) {
+        if (!newData.tables[tableName].fields[fieldName]) {
+          doMigration += `REMOVE FIELD ${fieldName} ON TABLE ${tableName};\n`;
+          const fieldType = oldData.tables[tableName].fields[fieldName].type;
+          undoMigration =
+            `DEFINE FIELD ${fieldName} ON TABLE ${tableName} TYPE ${fieldType};\n` +
+            undoMigration;
+        }
+      }
+      for (const indexName in oldData.tables[tableName].indexes) {
+        if (!newData.tables[tableName].indexes[indexName]) {
+          doMigration += `REMOVE INDEX ${indexName} ON TABLE ${tableName};\n`;
+          const index = oldData.tables[tableName].indexes[indexName];
+          const uniqueStr = index.unique ? 'UNIQUE ' : '';
+          undoMigration =
+            `DEFINE ${uniqueStr}INDEX ${indexName} ON TABLE ${tableName} FIELDS ${index.fields.join(', ')};\n` +
+            undoMigration;
+        }
+      }
+    }
+  }
+
+  await fs.writeFile('migration_do.surql', doMigration);
+  await fs.writeFile('migration_undo.surql', undoMigration);
+
+  console.log(
+    'Migration files generated: migration_do.surql and migration_undo.surql'
+  );
+}
+
+program
+  .command('extract')
+  .description(
+    'Inspect the current database structure and store schema introspection data'
+  )
+  .addHelpText(
+    'after',
+    `
+Example:
+  $ npm run extract
+
+This command will:
+  - Inspect the current database structure
+  - Store schema introspection data in the database
+  `
+  )
+  .action(async (options) => {
+    await loadConfig(program.opts().config);
+    const introspectionData = await introspectDatabase();
+    await saveIntrospection(introspectionData);
+  });
+
+program
+  .command('generate')
+  .description(
+    'Analyze the updated database state, generate migration files, and update stored introspection data'
+  )
+  .addHelpText(
+    'after',
+    `
+Example:
+  $ npm run generate
+
+This command will:
+  - Analyze the updated database state
+  - Generate migration files
+  - Store introspection data in the database
+  `
+  )
+  .action(async (options) => {
+    await loadConfig(program.opts().config);
+    const latestIntrospection = await getLatestIntrospection();
+    const currentIntrospection = await introspectDatabase();
+    await generateMigration(latestIntrospection.data, currentIntrospection);
+    //await saveIntrospection(currentIntrospection);
   });
 
 await program.parseAsync(process.argv);

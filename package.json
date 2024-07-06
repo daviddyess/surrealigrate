@@ -5,6 +5,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "extract": "node index.js extract",
+    "generate": "node index.js generate",
     "help": "node index.js --help",
     "help:info": "node index.js info --help",
     "help:migrate": "node index.js migrate --help",
