@@ -364,14 +364,14 @@ async function introspectDatabase() {
   }
   // Get table info
   let tableCount = 0;
-  log('\nCollecting database table information:');
+  log('\n Collecting database table information:');
   for (const table of Object.keys(tables)) {
-    log(` - Table ${table}...`);
+    log(`  - Table ${table}...`);
     introspection.tables[table] = await db.query(`INFO FOR TABLE ${table}`);
     tableCount++;
   }
-  log(' -------------------');
-  log(`${tableCount} tables extracted\n`);
+  log('  -------------------');
+  log(` ${tableCount} tables extracted\n`);
   logger.info(`Introspection complete`);
 
   return { dbInfo, dbTables: tables, introspection };
@@ -476,7 +476,7 @@ async function generateMigration(oldData, newData) {
 
   await fs.writeFile('migration_undo.surql', undoMigration);
 
-  console.log(
+  logger.info(
     'Migration files generated: migration_do.surql and migration_undo.surql'
   );
 }
