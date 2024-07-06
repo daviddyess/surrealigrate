@@ -343,7 +343,6 @@ This command will display:
 
 // Function to introspect the database
 async function introspectDatabase() {
-  await connectToDatabase();
   logger.info('Introspecting database tables');
   const introspection = {
     tables: {},
@@ -388,7 +387,6 @@ async function saveIntrospection(data) {
 
 // Function to get the latest introspection
 async function getLatestIntrospection() {
-  await connectToDatabase();
   const [[latest]] = await db.query(
     'SELECT * FROM introspections ORDER BY timestamp DESC LIMIT 1'
   );
@@ -501,6 +499,7 @@ This command will:
   )
   .action(async (options) => {
     await loadConfig(program.opts().config);
+    await connectToDatabase();
     const introspectionData = await introspectDatabase();
     await saveIntrospection(introspectionData);
   });
@@ -524,6 +523,7 @@ This command will:
   )
   .action(async (options) => {
     await loadConfig(program.opts().config);
+    await connectToDatabase();
     const latestIntrospection = await getLatestIntrospection();
     const currentIntrospection = await introspectDatabase();
     await generateMigration(latestIntrospection.data, currentIntrospection);
