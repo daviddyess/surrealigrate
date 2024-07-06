@@ -375,7 +375,7 @@ async function introspectDatabase() {
   log(`${tableCount} tables extracted\n`);
   logger.info(`Introspection complete`);
 
-  return introspection;
+  return { dbInfo, dbTables: tables, introspection };
 }
 
 // Function to save introspection data
@@ -392,69 +392,74 @@ async function getLatestIntrospection() {
   const [[latest]] = await db.query(
     'SELECT * FROM introspections ORDER BY timestamp DESC LIMIT 1'
   );
-  console.log(latest);
   return latest;
 }
 
 // Function to compare introspections and generate migration files
 async function generateMigration(oldData, newData) {
-  let doMigration = `
--- Migration to apply changes
--- Generated at ${new Date().toISOString()}
+  const timestamp = new Date().toISOString();
+  let doMigration = `-- Migration to apply changes
+-- Generated at ${timestamp}
 `;
-  let undoMigration = `
--- Migration to revert changes
--- Generated at ${new Date().toISOString()}
-`;
+  let undoMigration = ``;
 
   // Compare tables
-  for (const tableName in newData.tables) {
+  for (const tableName of Object.keys(newData.dbTables)) {
     if (!oldData.tables[tableName]) {
-      doMigration += `DEFINE TABLE ${tableName};\n`;
+      doMigration += `${newData.dbTables[tableName]};\n`;
       undoMigration = `REMOVE TABLE ${tableName};\n` + undoMigration;
     }
 
     // Compare fields
-    for (const fieldName in newData.tables[tableName].fields) {
-      if (!oldData.tables[tableName]?.fields[fieldName]) {
-        const fieldType = newData.tables[tableName].fields[fieldName].type;
-        doMigration += `DEFINE FIELD ${fieldName} ON TABLE ${tableName} TYPE ${fieldType};\n`;
-        undoMigration =
-          `REMOVE FIELD ${fieldName} ON TABLE ${tableName};\n` + undoMigration;
+    for (const fieldName in newData.introspection.tables[tableName][0]
+      ?.fields) {
+      if (!oldData.tables[tableName]?.[0]?.fields[fieldName]) {
+        doMigration += `${newData.introspection.tables[tableName]?.[0]?.fields[fieldName]};\n`;
+        if (oldData.tables[tableName]) {
+          undoMigration =
+            `REMOVE FIELD ${fieldName} ON TABLE ${tableName};\n` +
+            undoMigration;
+        }
       }
     }
 
     // Compare indexes
-    for (const indexName in newData.tables[tableName].indexes) {
-      if (!oldData.tables[tableName]?.indexes[indexName]) {
-        const index = newData.tables[tableName].indexes[indexName];
+    for (const indexName in newData.introspection.tables[tableName][0]
+      .indexes) {
+      if (!oldData.tables[tableName]?.[0]?.indexes[indexName]) {
+        const index =
+          newData.introspection.tables[tableName]?.[0]?.indexes[indexName];
         const uniqueStr = index.unique ? 'UNIQUE ' : '';
-        doMigration += `DEFINE ${uniqueStr}INDEX ${indexName} ON TABLE ${tableName} FIELDS ${index.fields.join(', ')};\n`;
-        undoMigration =
-          `REMOVE INDEX ${indexName} ON TABLE ${tableName};\n` + undoMigration;
+        doMigration += `${newData.introspection.tables[tableName]?.[0]?.indexes[indexName]};\n`;
+        if (oldData.tables[tableName]) {
+          undoMigration =
+            `REMOVE INDEX ${indexName} ON TABLE ${tableName};\n` +
+            undoMigration;
+        }
       }
     }
   }
 
   // Check for removed tables, fields, and indexes
   for (const tableName in oldData.tables) {
-    if (!newData.tables[tableName]) {
+    if (!newData.introspection.tables[tableName]) {
       doMigration += `REMOVE TABLE ${tableName};\n`;
       undoMigration = `DEFINE TABLE ${tableName};\n` + undoMigration;
     } else {
-      for (const fieldName in oldData.tables[tableName].fields) {
-        if (!newData.tables[tableName].fields[fieldName]) {
+      for (const fieldName in oldData.tables[tableName]?.[0]?.fields) {
+        if (!newData.introspection.tables[tableName]?.[0]?.fields[fieldName]) {
           doMigration += `REMOVE FIELD ${fieldName} ON TABLE ${tableName};\n`;
-          const fieldType = oldData.tables[tableName].fields[fieldName].type;
+          const fieldType =
+            oldData.tables[tableName]?.[0]?.fields[fieldName].type;
           undoMigration =
             `DEFINE FIELD ${fieldName} ON TABLE ${tableName} TYPE ${fieldType};\n` +
             undoMigration;
         }
       }
-      for (const indexName in oldData.tables[tableName].indexes) {
-        if (!newData.tables[tableName].indexes[indexName]) {
+      for (const indexName in oldData.tables[tableName]?.[0]?.indexes) {
+        if (!newData.introspection.tables[tableName]?.[0]?.indexes[indexName]) {
           doMigration += `REMOVE INDEX ${indexName} ON TABLE ${tableName};\n`;
-          const index = oldData.tables[tableName].indexes[indexName];
+          const index = oldData.tables[tableName]?.[0]?.indexes[indexName];
           const uniqueStr = index.unique ? 'UNIQUE ' : '';
           undoMigration =
             `DEFINE ${uniqueStr}INDEX ${indexName} ON TABLE ${tableName} FIELDS ${index.fields.join(', ')};\n` +
@@ -465,6 +470,12 @@ async function generateMigration(oldData, newData) {
   }
 
   await fs.writeFile('migration_do.surql', doMigration);
+
+  undoMigration =
+    `-- Migration to revert changes
+-- Generated at ${timestamp}
+` + undoMigration;
+
   await fs.writeFile('migration_undo.surql', undoMigration);
 
   console.log(
