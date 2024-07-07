@@ -5,14 +5,10 @@
  */
 import { promises as fs, existsSync, mkdirSync } from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { Command } from 'commander';
 import config, { loadConfig } from './lib/configuration.js';
 import { getLogger } from './lib/logger.js';
 import { db, connectToDatabase } from './lib/surrealdb.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 import { log } from 'console';
 
