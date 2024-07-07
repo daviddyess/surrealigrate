@@ -8,6 +8,8 @@
     "extract": "node index.js extract",
     "generate": "node index.js generate",
     "help": "node index.js --help",
+    "help:extract": "node index.js extract --help",
+    "help:generate": "node index.js generate --help",
     "help:info": "node index.js info --help",
     "help:migrate": "node index.js migrate --help",
     "help:rollback": "node index.js rollback --help",
