@@ -20,12 +20,15 @@ import { log } from 'console';
 const logger = getLogger('SurrealDB');
 
 async function getMigrationsFolder(folder = undefined) {
-  const migrationsFolder = folder ?? config?.migrations?.folder;
+  const migrationsFolder =
+    folder ?? config?.migrations?.folder ?? './migrations';
   if (!existsSync(migrationsFolder)) {
     logger.warn(`Migrations folder ${migrationsFolder} does not exist`);
     mkdirSync(migrationsFolder, { recursive: true });
     logger.info(`Created migrations folder ${migrationsFolder}`);
   }
+
+  logger.info(`Migrations folder: ${migrationsFolder}`);
 
   return migrationsFolder?.slice(-1) === '/'
     ? migrationsFolder
@@ -34,7 +37,7 @@ async function getMigrationsFolder(folder = undefined) {
 
 async function getMigrationFiles(directory) {
   try {
-    const files = await fs.readdir(directory);
+    const files = await fs.readdir(await getMigrationsFolder(directory));
     return files
       .filter((file) => file.includes('.do.') || file.includes('.undo.'))
       .reduce((acc, file) => {
@@ -202,7 +205,10 @@ async function getInfo(directory) {
   const versions = Object.keys(migrationFiles).sort(
     (a, b) => parseInt(a) - parseInt(b)
   );
-  const latestVersion = Math.max(...versions.map((v) => parseInt(v)));
+  const latestVersion =
+    versions?.length > 0
+      ? Math.max(...versions.map((v) => parseInt(v)))
+      : '\x1b[33m No migration files found \x1b[0m'; // Yellow
 
   const pendingMigrations = versions
     .filter((version) => parseInt(version) > currentVersionInfo.version)
@@ -212,9 +218,12 @@ async function getInfo(directory) {
     }));
 
   return {
-    currentVersion: currentVersionInfo.version,
+    currentVersion: `\x1b[34m ${currentVersionInfo.version}\x1b[0m`, // Blue
     currentVersionTitle: currentVersionInfo.title,
-    latestVersion,
+    latestVersion:
+      latestVersion > currentVersionInfo.version
+        ? `\x1b[93m ${latestVersion}\x1b[0m` // Bright Yellow
+        : `\x1b[92m ${latestVersion}\x1b[0m`, // Bright Green
     pendingMigrations
   };
 }
@@ -225,9 +234,9 @@ async function displayInfo(directory) {
 
     log('\nMigration Status:');
     log(
-      `Current Version: ${info.currentVersion} (${info.currentVersionTitle})`
+      ` Current Version: ${info.currentVersion} (${info.currentVersionTitle})`
     );
-    log(`Latest Version: ${info.latestVersion}\n`);
+    log(`  Latest Version: ${info.latestVersion}\n`);
 
     if (info.pendingMigrations.length > 0) {
       log('Pending Migrations:');
@@ -256,11 +265,7 @@ program
   )
   .version('1.0.0')
   .option('-c, --config <path>', 'path to YAML configuration file')
-  .option(
-    '-d, --dir <path>',
-    'directory containing migration files',
-    './migrations'
-  )
+  .option('-d, --dir <path>', 'directory containing migration files')
   .addHelpText(
     'after',
     `
@@ -270,6 +275,9 @@ Example calls:
   $ npm run rollback
   $ npm run rollback --to 3
   $ npm run info
+  $ npm run extract
+  $ npm run generate -- --name "migration-title"
+  $ npm run generate -- -d ./migrations/pending -n "migration-title"
 
 Configuration:
   This tool can be configured using a YAML file, environment variables, or a combination of both.
@@ -543,7 +551,7 @@ This command will:
 program
   .command('generate')
   .description(
-    'Analyze the updated database state, generate migration files, and update stored introspection data'
+    'Analyze an updated database state, generate migration files, update migration status, and update stored introspection data. Must be run after extract.'
   )
   .option('-n, --name <title>', 'title of the migration')
   .addHelpText(
@@ -551,6 +559,8 @@ program
     `
 Example:
   $ npm run generate
+  $ npm run generate -- --name "migration-title"
+  $ npm run generate -- -d ./migrations/pending -n "migration-title"
 
 This command will:
   - Analyze the updated database state
