@@ -3,7 +3,7 @@
  * @copyright Copyright (c) 2024 David Dyess II
  * @license MIT see LICENSE
  */
-import { promises as fs } from 'fs';
+import { promises as fs, existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Command } from 'commander';
@@ -18,6 +18,19 @@ import { log } from 'console';
 
 // Setup logger
 const logger = getLogger('SurrealDB');
+
+async function getMigrationsFolder(folder = undefined) {
+  const migrationsFolder = folder ?? config?.migrations?.folder;
+  if (!existsSync(migrationsFolder)) {
+    logger.warn(`Migrations folder ${migrationsFolder} does not exist`);
+    mkdirSync(migrationsFolder, { recursive: true });
+    logger.info(`Created migrations folder ${migrationsFolder}`);
+  }
+
+  return migrationsFolder?.slice(-1) === '/'
+    ? migrationsFolder
+    : migrationsFolder + '/';
+}
 
 async function getMigrationFiles(directory) {
   try {
@@ -229,6 +242,8 @@ async function displayInfo(directory) {
     logger.error(`Failed to retrieve migration info: ${error.message}\n`);
   }
 }
+
+await loadConfig();
 /**
  * Main command line interface
  */
@@ -290,7 +305,10 @@ Migration files should be named in the format: <version>.<do|undo>.<title>.surql
   `
   )
   .action(async (options) => {
-    await loadConfig(program.opts().config);
+    if (program.opts().config) {
+      await loadConfig(program.opts().config);
+    }
+
     await migrate(program.opts().dir, options.to);
   });
 /**
@@ -312,7 +330,10 @@ This command will rollback the last applied migration or rollback to a specific 
   `
   )
   .action(async (options) => {
-    await loadConfig(program.opts().config);
+    if (program.opts().config) {
+      await loadConfig(program.opts().config);
+    }
+
     await rollback(program.opts().dir, options.to);
   });
 /**
@@ -334,7 +355,10 @@ This command will display:
   `
   )
   .action(async (options) => {
-    await loadConfig(program.opts().config);
+    if (program.opts().config) {
+      await loadConfig(program.opts().config);
+    }
+
     await displayInfo(program.opts().dir);
   });
 /**
@@ -345,6 +369,7 @@ This command will display:
 async function introspectDatabase() {
   logger.info('Introspecting database tables');
   const introspection = {
+    definitions: {},
     tables: {},
     version: Date.now() // Using timestamp as version
   };
@@ -352,6 +377,7 @@ async function introspectDatabase() {
   // Get all tables
   const dbInfo = await db.query('INFO FOR DB');
   const tables = dbInfo?.[0]?.tables;
+  introspection.definitions = tables;
   // Create introspections table if it doesn't exist
   if (!tables?.introspections) {
     await db.query(`
@@ -393,11 +419,21 @@ async function getLatestIntrospection() {
   return latest;
 }
 
+async function getNextMigration() {
+  const lastMigration = await getCurrentVersionInfo();
+  const newVersion = lastMigration.version + 1;
+  const versionLength = [...`${newVersion}`].length;
+  const zero = '0';
+  const prependZeros = `${zero.repeat((config?.migrations?.digits ?? 3) - 1 - Math.floor(versionLength / 10))}`;
+  return `${prependZeros}${newVersion}`;
+}
 // Function to compare introspections and generate migration files
-async function generateMigration(oldData, newData) {
-  const timestamp = new Date().toISOString();
+async function generateMigration(oldData, newData, title) {
+  const MIGRATIONS = await getMigrationsFolder();
+  const VERSION = await getNextMigration();
+  const TIMESTAMP = new Date().toISOString();
   let doMigration = `-- Migration to apply changes
--- Generated at ${timestamp}
+-- Generated at ${TIMESTAMP}
 `;
   let undoMigration = ``;
 
@@ -442,43 +478,40 @@ async function generateMigration(oldData, newData) {
   for (const tableName in oldData.tables) {
     if (!newData.introspection.tables[tableName]) {
       doMigration += `REMOVE TABLE ${tableName};\n`;
-      undoMigration = `DEFINE TABLE ${tableName};\n` + undoMigration;
+      // If the table was defined in the old data, use the old definition, if available
+      undoMigration = oldData?.definitions?.[tableName]
+        ? oldData?.definitions?.[tableName]
+        : `DEFINE TABLE ${tableName};\n` + undoMigration;
     } else {
       for (const fieldName in oldData.tables[tableName]?.[0]?.fields) {
         if (!newData.introspection.tables[tableName]?.[0]?.fields[fieldName]) {
           doMigration += `REMOVE FIELD ${fieldName} ON TABLE ${tableName};\n`;
-          const fieldType =
-            oldData.tables[tableName]?.[0]?.fields[fieldName].type;
           undoMigration =
-            `DEFINE FIELD ${fieldName} ON TABLE ${tableName} TYPE ${fieldType};\n` +
+            `${oldData.tables[tableName]?.[0]?.fields[fieldName]};\n` +
             undoMigration;
         }
       }
       for (const indexName in oldData.tables[tableName]?.[0]?.indexes) {
         if (!newData.introspection.tables[tableName]?.[0]?.indexes[indexName]) {
           doMigration += `REMOVE INDEX ${indexName} ON TABLE ${tableName};\n`;
-          const index = oldData.tables[tableName]?.[0]?.indexes[indexName];
-          const uniqueStr = index.unique ? 'UNIQUE ' : '';
           undoMigration =
-            `DEFINE ${uniqueStr}INDEX ${indexName} ON TABLE ${tableName} FIELDS ${index.fields.join(', ')};\n` +
+            `${oldData.tables[tableName]?.[0]?.indexes[indexName]};\n` +
             undoMigration;
         }
       }
     }
   }
-
-  await fs.writeFile('migration_do.surql', doMigration);
+  const doFilename = `${VERSION}.do.${title}.surql`;
+  await fs.writeFile(`${MIGRATIONS}${doFilename}`, doMigration);
 
   undoMigration =
     `-- Migration to revert changes
--- Generated at ${timestamp}
+-- Generated at ${TIMESTAMP}
 ` + undoMigration;
+  const undoFilename = `${VERSION}.undo.${title}.surql`;
+  await fs.writeFile(`${MIGRATIONS}${undoFilename}`, undoMigration);
 
-  await fs.writeFile('migration_undo.surql', undoMigration);
-
-  logger.info(
-    'Migration files generated: migration_do.surql and migration_undo.surql'
-  );
+  logger.info(`Migration files generated: ${doFilename} and ${undoFilename}\n`);
 }
 
 program
@@ -498,7 +531,10 @@ This command will:
   `
   )
   .action(async (options) => {
-    await loadConfig(program.opts().config);
+    if (program.opts().config) {
+      await loadConfig(program.opts().config);
+    }
+
     await connectToDatabase();
     const introspectionData = await introspectDatabase();
     await saveIntrospection(introspectionData);
@@ -509,6 +545,7 @@ program
   .description(
     'Analyze the updated database state, generate migration files, and update stored introspection data'
   )
+  .option('-n, --name <title>', 'title of the migration')
   .addHelpText(
     'after',
     `
@@ -522,11 +559,18 @@ This command will:
   `
   )
   .action(async (options) => {
-    await loadConfig(program.opts().config);
+    if (program.opts().config) {
+      await loadConfig(program.opts().config);
+    }
+
     await connectToDatabase();
     const latestIntrospection = await getLatestIntrospection();
     const currentIntrospection = await introspectDatabase();
-    await generateMigration(latestIntrospection.data, currentIntrospection);
+    await generateMigration(
+      latestIntrospection.data,
+      currentIntrospection,
+      options.name
+    );
     //await saveIntrospection(currentIntrospection);
   });
 
