@@ -541,7 +541,7 @@ This command will:
 
     await connectToDatabase();
     const introspectionData = await introspectDatabase();
-    await saveIntrospection(introspectionData);
+    await saveIntrospection(introspectionData.introspection);
   });
 
 program
