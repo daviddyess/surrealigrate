@@ -89,7 +89,8 @@ async function setCurrentVersion(version, title = null) {
   }
 }
 
-async function executeMigration(filePath, action) {
+async function executeMigration(directory, file, action) {
+  const filePath = path.join(await getMigrationsFolder(directory), file);
   const content = await fs.readFile(filePath, 'utf-8');
   await db.query('BEGIN TRANSACTION');
   try {
@@ -140,7 +141,7 @@ async function migrate(directory, toVersion = null) {
       logger.info(
         `Migrating to version ${version}${title ? ` (${title})` : ''}`
       );
-      await executeMigration(path.join(directory, doFile), 'do');
+      await executeMigration(directory, doFile, 'do');
       await setCurrentVersion(parseInt(version), title);
     }
   }
