@@ -173,7 +173,7 @@ async function rollback(directory, toVersion = null) {
       logger.info(
         `Rolling back version ${version}${title ? ` (${title})` : ''}`
       );
-      await executeMigration(path.join(directory, undoFile), 'undo');
+      await executeMigration(directory, undoFile, 'undo');
       const del = await db.query('DELETE migrations WHERE version = $version', {
         version: parseInt(version)
       });
