@@ -281,11 +281,13 @@ Configuration:
   Priority order: Environment Variables > YAML Config > Default Config
 
 Environment Variables:
-  DB_URL         SurrealDB connection URL
-  DB_USER        Database user
-  DB_PASS        Database password
-  DB_NAMESPACE   Database namespace
-  DB_NAME        Database name
+  SURREAL_URL                SurrealDB connection URL
+  SURREAL_USER               Database user
+  SURREAL_PASS               Database password
+  SURREAL_NAMESPACE          Database namespace
+  SURREAL_DATABASE           Database name
+  SURREAL_MIGRATIONS_DIGITS  Number of digits to use for migration version
+  SURREAL_MIGRATIONS_FOLDER  Folder to store migration files
 
 For more information on each command, use: npm run help:[command]
 `
