@@ -382,8 +382,8 @@ async function introspectDatabase() {
   };
 
   // Get all tables
-  const dbInfo = await db.query('INFO FOR DB');
-  const tables = dbInfo?.[0]?.tables;
+  let dbInfo = await db.query('INFO FOR DB');
+  let tables = dbInfo?.[0]?.tables;
   introspection.definitions = tables;
   // Create introspections table if it doesn't exist
   if (!tables?.introspections) {
@@ -393,7 +393,9 @@ async function introspectDatabase() {
     DEFINE FIELD timestamp ON introspections TYPE datetime DEFAULT time::now() PERMISSIONS FOR select, create, update, delete WHERE FULL;
     DEFINE INDEX timestamp ON introspections FIELDS timestamp UNIQUE;
     `);
-    logger.info('Created introspections table');
+    logger.info('Created introspections table; Restarting introspection...');
+    dbInfo = await db.query('INFO FOR DB');
+    tables = dbInfo?.[0]?.tables;
   }
   // Get table info
   let tableCount = 0;
