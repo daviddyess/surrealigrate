@@ -174,7 +174,7 @@ async function rollback(directory, toVersion = null) {
         `Rolling back version ${version}${title ? ` (${title})` : ''}`
       );
       await executeMigration(directory, undoFile, 'undo');
-      const del = await db.query('DELETE migrations WHERE version = $version', {
+      await db.query('DELETE migrations WHERE version = $version', {
         version: parseInt(version)
       });
     }
@@ -441,9 +441,7 @@ async function generateMigration(oldData, newData, title) {
   const MIGRATIONS = await getMigrationsFolder();
   const VERSION = await getNextMigration();
   const TIMESTAMP = new Date().toISOString();
-  let doMigration = `-- Migration to apply changes
--- Generated at ${TIMESTAMP}
-`;
+  let doMigration = ``;
   let undoMigration = ``;
 
   // Compare tables
@@ -510,17 +508,31 @@ async function generateMigration(oldData, newData, title) {
       }
     }
   }
-  const doFilename = `${VERSION}.do.${title}.surql`;
-  await fs.writeFile(`${MIGRATIONS}${doFilename}`, doMigration);
+  let doFilename;
+  if (doMigration.length > 0) {
+    if (!title) {
+      title = Date.now().toString();
+    }
+    doFilename = `${VERSION}.do.${title}.surql`;
+    doMigration = `-- Migration to apply changes
+-- Generated at ${TIMESTAMP}
+${doMigration}
+`;
 
-  undoMigration =
-    `-- Migration to revert changes
+    await fs.writeFile(`${MIGRATIONS}${doFilename}`, doMigration);
+    undoMigration =
+      `-- Migration to revert changes
 -- Generated at ${TIMESTAMP}
 ` + undoMigration;
-  const undoFilename = `${VERSION}.undo.${title}.surql`;
-  await fs.writeFile(`${MIGRATIONS}${undoFilename}`, undoMigration);
+    const undoFilename = `${VERSION}.undo.${title}.surql`;
+    await fs.writeFile(`${MIGRATIONS}${undoFilename}`, undoMigration);
 
-  logger.info(`Migration files generated: ${doFilename} and ${undoFilename}\n`);
+    logger.info(
+      `Migration files generated: ${doFilename} and ${undoFilename}\n`
+    );
+  } else {
+    logger.info('No changes detected. No migration files generated.\n');
+  }
 }
 
 program
@@ -576,7 +588,17 @@ This command will:
 
     await connectToDatabase();
     const latestIntrospection = await getLatestIntrospection();
+    if (!latestIntrospection?.data) {
+      logger.warn(
+        'The generate command does not make any database changes and therefore cannot initiate a stored intropection.'
+      );
+      logger.info(
+        'Please run extract command first, this initializes the stored introspection data, and provides comparison data for the generate command.\n'
+      );
+      return;
+    }
     const currentIntrospection = await introspectDatabase();
+
     await generateMigration(
       latestIntrospection.data,
       currentIntrospection,
