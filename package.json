@@ -29,7 +29,7 @@
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
     "js-yaml": "^4.1.0",
-    "surrealdb.js": "^1.0.0-beta.9",
+    "surrealdb.js": "^1.0.0-beta.20",
     "winston": "^3.10.0"
   },
   "devDependencies": {
@@ -37,7 +37,7 @@
     "eslint": "^9.3.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.1.3",
-    "globals": "^15.3.0",
+    "globals": "^15.9.0",
     "prettier": "3.2.5"
   }
 }
