@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON to SURQL Converter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+        }
+        .input-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>JSON to SURQL Converter</h1>
+    <div class="input-group">
+        <label for="jsonFile">JSON File:</label>
+        <input type="file" id="jsonFile" accept=".json">
+    </div>
+    <div class="input-group">
+        <label for="tableName">Table Name:</label>
+        <input type="text" id="tableName" placeholder="Enter table name">
+    </div>
+    <button onclick="convertToSURQL()">Convert to SURQL</button>
+    <br><br>
+    <textarea id="output" readonly></textarea>
+    <br>
+    <button onclick="downloadSURQL()">Download SURQL</button>
+
+    <script>
+        function convertToSURQL() {
+            const fileInput = document.getElementById('jsonFile');
+            const tableNameInput = document.getElementById('tableName');
+            const file = fileInput.files[0];
+            const tableName = tableNameInput.value.trim();
+            
+            if (!file) {
+                alert('Please select a JSON file');
+                return;
+            }
+
+            if (!tableName) {
+                alert('Please enter a table name');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    const surql = jsonToSURQL(json, tableName);
+                    document.getElementById('output').value = surql;
+                } catch (error) {
+                    alert('Error parsing JSON: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function jsonToSURQL(json, tableName) {
+            let surql = '';
+            if (Array.isArray(json)) {
+                json.forEach((item, index) => {
+                    let table
+                    if(item?.id){
+                        table = `${tableName}:${item.id}`
+                    } else {
+                        table = tableName;
+                    }
+                    surql += `CREATE ${tableName} CONTENT ${JSON.stringify(item)};\n`;
+                });
+            } else if (typeof json === 'object') {
+                for (const [key, value] of Object.entries(json)) {
+                    if (Array.isArray(value)) {
+                        value.forEach((item, index) => {
+                            surql += `CREATE ${tableName}:${key}_${index + 1} CONTENT ${JSON.stringify(item)};\n`;
+                        });
+                    } else if (typeof value === 'object') {
+                        surql += `CREATE ${tableName}:${key} CONTENT ${JSON.stringify(value)};\n`;
+                    } else {
+                        surql += `UPDATE ${tableName} SET ${key} = ${JSON.stringify(value)};\n`;
+                    }
+                }
+            } else {
+                surql += `LET $${tableName} = ${JSON.stringify(json)};\n`;
+            }
+            return surql;
+        }
+
+        function downloadSURQL() {
+            const surql = document.getElementById('output').value;
+            if (!surql) {
+                alert('No SURQL to download');
+                return;
+            }
+            const blob = new Blob([surql], {type: 'text/plain;charset=utf-8'});
+            saveAs(blob, 'output.surql');
+        }
+    </script>
+</body>
+</html>
