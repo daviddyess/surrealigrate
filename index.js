@@ -147,6 +147,35 @@ async function migrate(directory, toVersion = null) {
   }
 }
 
+async function fastForward(directory) {
+  await connectToDatabase();
+  const migrationFiles = await getMigrationFiles(directory);
+  const currentVersion = await getCurrentVersion();
+  const versions = Object.keys(migrationFiles).sort(
+    (a, b) => parseInt(a) - parseInt(b)
+  );
+
+  const targetVersion = Math.max(...versions.map((v) => parseInt(v)));
+
+  if (targetVersion === currentVersion) {
+    logger.info('No pending migrations. Migration state is up to date.\n');
+    return;
+  }
+
+  for (const version of versions) {
+    if (
+      parseInt(version) > currentVersion &&
+      parseInt(version) <= targetVersion
+    ) {
+      const { title } = migrationFiles[version];
+      logger.info(
+        `Fast forwarding to version ${version}${title ? ` (${title})` : ''}`
+      );
+      await setCurrentVersion(parseInt(version), title);
+    }
+  }
+}
+
 async function rollback(directory, toVersion = null) {
   await connectToDatabase();
   const migrationFiles = await getMigrationFiles(directory);
@@ -319,6 +348,29 @@ Migration files should be named in the format: <version>.<do|undo>.<title>.surql
     await migrate(program.opts().dir, options.to);
   });
 /**
+ * Fast forward to generated migrations
+ */
+program
+  .command('fastforward')
+  .description('Fast forward to generated migrations')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  $ npm run fastforward
+  $ npm run fastforward -d ./custom-migrations
+
+This command will fast forward the migration state to the last generated migration.
+  `
+  )
+  .action(async () => {
+    if (program.opts().config) {
+      await loadConfig(program.opts().config);
+    }
+
+    await fastForward(program.opts().dir);
+  });
+/**
  * Rollback applied migrations
  */
 program
@@ -361,7 +413,7 @@ This command will display:
   - List of pending migrations (if any)
   `
   )
-  .action(async (options) => {
+  .action(async () => {
     if (program.opts().config) {
       await loadConfig(program.opts().config);
     }
@@ -468,9 +520,6 @@ async function generateMigration(oldData, newData, title) {
     for (const indexName in newData.introspection.tables[tableName][0]
       .indexes) {
       if (!oldData.tables[tableName]?.[0]?.indexes[indexName]) {
-        const index =
-          newData.introspection.tables[tableName]?.[0]?.indexes[indexName];
-        const uniqueStr = index.unique ? 'UNIQUE ' : '';
         doMigration += `${newData.introspection.tables[tableName]?.[0]?.indexes[indexName]};\n`;
         if (oldData.tables[tableName]) {
           undoMigration =
@@ -551,7 +600,7 @@ This command will:
   - Store schema introspection data in the database
   `
   )
-  .action(async (options) => {
+  .action(async () => {
     if (program.opts().config) {
       await loadConfig(program.opts().config);
     }
