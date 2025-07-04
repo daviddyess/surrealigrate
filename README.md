@@ -10,6 +10,14 @@ SurrealDB CLI Migrations for Node.js:
 - Built-in help
 - Supports YAML configuration files, environment variables, and a combination of both
 
+## Installation
+
+Using npm:
+
+```bash
+npm install surrealigrate --save-dev
+```
+
 ## Development Workflow
 
 1. Create your database
