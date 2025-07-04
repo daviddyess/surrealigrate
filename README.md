@@ -2,34 +2,42 @@
 
 SurrealDB CLI Migrations for Node.js:
 
+- Edit your database in Surrealist, then generate a migration with Surrealigrate
 - Versioned migration files such as `0001.do.sql`, `0002.undo.sql`, etc.
-
-- Migrate to the latest version or a specific version using `npm run migrate` or `npm run migrate -- --to 3`
-
-- Rollback to previous migration or a specific version using `npm run rollback` or `npm run rollback -- --to 2`
-
-- Display current migration status with pending migrations using `npm run info`
-
-- Built-in help using `npm run help` or `npm run help:[command]` or `npm run [command] -- --help`
-
+- Migrate to the latest version or a specific version
+- Rollback to previous migration or a specific version
+- Display current migration status with pending migrations
+- Built-in help
 - Supports YAML configuration files, environment variables, and a combination of both
 
-**Built with assistance from Claude AI**
+## Development Workflow
+
+1. Create your database
+2. Run `npx surrealdb info` to verify your database
+3. Run `npx surrealdb extract` to create an introspection snapshot
+4. Make changes to your database schema in Surrealist
+5. Run `npx surrealdb generate -n test` to create a migration files, such as `0001.do.test.surql` and `0001.undo.test.surql`
+6. Run `npx surrealdb fastforward` to do a version only migration (you already made the changes manually)
+7. Use `npx surrealdb rollback` followed by `npx surrealdb migrate` to test your migration
+8. Repeat steps 3 - 7
+
+## Production Workflow
+
+1. Create your database
+2. Run `npx surrealdb info` to verify your database
+3. Run `npx surrealdb migrate`
 
 ## Migrations Folder
 
-The migrations folder defaults to `./migrations` but can be configured using the `-d` or `--dir` option with any command.
+The migrations folder defaults to `./migrations` but can be configured using the `-d` or `--dir` option with any command or in a configuration file.
 
 ## Migration File Naming Convention
 
 - The migration file naming convention is `0001.do.surql` for the first migration, `0002.do.surql` for the second migration, and so on.
-
 - You can also use a title in the migration file name, such as `0001.do.posts.surql` and `0002.undo.posts.surql`.
-
 - The version number is padded with leading zeros to ensure proper sorting order, you can use any number of leading zeros as long as they are consistent throughout the migration files.
-
 - Version numbers simplify to an integer, so you can use --to 3 to specify a migration file that uses `003` in the file name.
-
+- Version numbers can be configured using the `digits` setting for generated migrations to follow your naming convention.
 - The `do` or `undo` segment indicates whether the file is for a migration (do) or a rollback (undo).
 
 ## Configuration
@@ -39,20 +47,25 @@ The migrations folder defaults to `./migrations` but can be configured using the
 ```yaml
 database:
   url: 'http://127.0.0.1:8000/rpc'
-  user: 'root'
-  pass: 'root'
+  user: 'myuser'
+  pass: 'mypassword'
   namespace: 'myNamespace'
   dbname: 'myDatabase'
+migrations:
+  folder: './migrations'
+  digits: 4
 ```
 
 ### Environment variables
 
 ```env
-DB_URL=http://127.0.0.1:8000/rpc
-DB_USER=myuser
-DB_PASS=mypassword
-DB_NAMESPACE=myNamespace
-DB_NAME=myDatabase
+SURREAL_URL=http://127.0.0.1:8000/rpc
+SURREAL_USER=myuser
+SURREAL_PASS=mypassword
+SURREAL_NAMESPACE=myNamespace
+SURREAL_DATABASE=myDatabase
+SURREAL_MIGRATIONS_DIGITS=4
+SURREAL_MIGRATIONS_FOLDER='./migrations'
 ```
 
 ## Usage
@@ -60,125 +73,116 @@ DB_NAME=myDatabase
 ### Help
 
 ```
-node index.js --help
-```
-
-```
-npm run help
+npx surrealdb --help
 ```
 
 ### Command Help
 
+#### Extract Help
+
+```
+npx surrealdb extract --help
+```
+
+#### Generate Help
+
+```
+npx surrealdb generate --help
+```
+
 #### Migrate Help
 
 ```
-node index.js migrate --help
-```
-
-```
-npm run migrate -- --help
-```
-
-```
-npm run help:migrate
+npx surrealdb migrate -- --help
 ```
 
 #### Rollback Help
 
 ```
-node index.js rollback --help
-```
-
-```
-npm run rollback -- --help
-```
-
-```
-npm run help:rollback
+npx surrealdb rollback --help
 ```
 
 #### Info Help
 
 ```
-node index.js info --help
+npx surreald info --help
 ```
 
-```
-npm run info -- --help
-```
+### Extract a Snapshot
+
+- Creates an introspection snapshot to be used when generating the next migration
+- Must be manually ran between each generated migration
 
 ```
-npm run help:info
+npx surrealdb extract
 ```
 
-### Migrate to the latest version
+### Generate a Migration
+
+- Can be ran multiple times to override a new migration during development
+- Requires a snapshot of the previous migration to be created using `extract`
 
 ```
-node index.js migrate
+npx surrealdb generate
 ```
 
-```
-npm run migrate
-```
-
-### Migrate to a specific version
+### Migrate to the Latest Version
 
 ```
-node index.js migrate --to 3
+npx surreald migrate
 ```
 
-```
-npm run migrate -- --to 3
-```
-
-### Rollback the last migration
+### Migrate to a Specific Version
 
 ```
-node index.js rollback
+npx surreald migrate --to 3
 ```
 
-```
-npm run rollback
-```
+- `3` is migration up to 0003.do.surql
+- Includes any migrations prior to the specified version
 
-### Rollback to a specific version
+### Fast Forward
 
-```
-node index.js rollback --to 2
-```
+- Migrate version without changing database schema
+- Useful during development; generate a migration from introspection, then skip to the correct migration status with `fastforward`
 
 ```
-npm run rollback -- --to 2
+npx surrealdb fastforward
 ```
+
+### Rollback the Last Migration
+
+- Useful during development; fastforward then use rollback, finally perform a test migration
+
+```
+npx surreald rollback
+```
+
+### Rollback to a Specific Version
+
+```
+npx surreald rollback --to 2
+```
+
+- `2` rollsback  down to 0002.undo.surql
+- Removes any migrations after the specified version
 
 ### Using default configuration
 
 ```
-node index.js migrate
-```
-
-```
-npm run migrate
+npx surreald migrate
 ```
 
 ### Using a YAML config file
 
 ```
-node index.js migrate -c ./config.yml
-```
-
-```
-npm run migrate -- -c ./config.yml
+npx surreald migrate -c ./config.yml
 ```
 
 ### Environment variables will override other configurations
 
 ```
-DB_USER=admin DB_PASS=secretpassword node index.js migrate
-```
-
-```
-DB_USER=admin DB_PASS=secretpassword npm run migrate
+DB_USER=admin DB_PASS=secretpassword npx surreald migrate
 ```
 
 ## Logs
@@ -191,4 +195,4 @@ Surrealigrate is licensed under the MIT License. You are free to use it in your 
 
 ## Copyright
 
-Copyright (c) 2024 David Dyess II and contributors. All rights reserved.
+Copyright (c) 2024-2025 David Dyess II and contributors. All rights reserved.
