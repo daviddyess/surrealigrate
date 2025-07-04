@@ -4,20 +4,23 @@
   "description": "A CLI migration tool for SurrealDB",
   "main": "index.js",
   "type": "module",
+  "bin": {
+    "surrealdb": "./cli.js"
+  },
   "scripts": {
-    "extract": "node index.js extract",
-    "fastforward": "node index.js fastforward",
-    "generate": "node index.js generate",
-    "help": "node index.js --help",
-    "help:extract": "node index.js extract --help",
-    "help:fastforward": "node index.js fastforward --help",
-    "help:generate": "node index.js generate --help",
-    "help:info": "node index.js info --help",
-    "help:migrate": "node index.js migrate --help",
-    "help:rollback": "node index.js rollback --help",
-    "info": "node index.js info",
-    "migrate": "node index.js migrate",
-    "rollback": "node index.js rollback"
+    "extract": "node cli.js extract",
+    "fastforward": "node cli.js fastforward",
+    "generate": "node cli.js generate",
+    "help": "node cli.js --help",
+    "help:extract": "node cli.js extract --help",
+    "help:fastforward": "node cli.js fastforward --help",
+    "help:generate": "node cli.js generate --help",
+    "help:info": "node cli.js info --help",
+    "help:migrate": "node cli.js migrate --help",
+    "help:rollback": "node cli.js rollback --help",
+    "info": "node cli.js info",
+    "migrate": "node cli.js migrate",
+    "rollback": "node cli.js rollback"
   },
   "keywords": [
     "surrealdb",
@@ -41,5 +44,13 @@
     "eslint-plugin-prettier": "^5.1.3",
     "globals": "^15.9.0",
     "prettier": "3.2.5"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daviddyess/surrealigrate"
+  },
+  "bugs": {
+    "url": "https://github.com/daviddyess/surrealigrate/issues"
+  },
+  "homepage": "https://github.com/daviddyess/surrealigrate"
 }
